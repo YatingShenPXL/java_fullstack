@@ -1,6 +1,10 @@
-package pxl.be.organizationservice.domain;
+package com.example.organizationservice.domain;
+
 
 import jakarta.persistence.*;
+import pxl.be.departmentservice.domain.Department;
+import pxl.be.employeeservice.domain.Employee;
+
 import java.util.ArrayList;
 import java.util.List;
 
