@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
+import pxl.be.departmentservice.domain.Department;
+import pxl.be.employeeservice.domain.Employee;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,9 +26,9 @@ public class Organization {
 
     @Transient
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
-    private List<Object> departments = new ArrayList<>();
+    private List<Department> departments = new ArrayList<>();
 
     @Transient
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
-    private List<Object> employees = new ArrayList<>();
+    private List<Employee> employees = new ArrayList<>();
 }
