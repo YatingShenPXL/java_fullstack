@@ -1,4 +1,4 @@
-package com.example.organizationservice.dto;
+package pxl.be.organizationservice.dto;
 
 import pxl.be.departmentservice.domain.Department;
 import pxl.be.employeeservice.domain.Employee;

@@ -1,3 +1,3 @@
-package com.example.organizationservice.dto;
+package pxl.be.organizationservice.dto;
 
 public record OrganizationRequest(String name, String address) { }
