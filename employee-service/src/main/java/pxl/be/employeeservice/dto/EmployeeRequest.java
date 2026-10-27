@@ -1,15 +1,12 @@
 package pxl.be.employeeservice.dto;
 
-import java.time.LocalDateTime;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 public record EmployeeRequest(
-        String firstName,
-        String lastName,
-        String email,
-        String phone,
-        String address,
-        String city,
-        String state,
-        LocalDateTime dateOfBirth,
-        long departmentId,
-        long organizationId) { }
+        @NotBlank String firstName,
+        @NotBlank String lastName,
+        @NotBlank @Email String email,
+        @NotNull Long departmentId,
+        @NotNull Long organizationId) { }

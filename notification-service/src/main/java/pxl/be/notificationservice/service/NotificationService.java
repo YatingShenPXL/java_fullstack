@@ -13,7 +13,7 @@ public class NotificationService {
 
     public void notify(NotificationRequest request) {
         LOGGER.info(
-                "Gesimuleerde notificatie voor {}: {}",
+                "Notificatie ontvangen voor {}: {}",
                 request.recipient(),
                 request.message()
         );

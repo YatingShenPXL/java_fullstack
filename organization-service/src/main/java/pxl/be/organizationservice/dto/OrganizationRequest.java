@@ -1,3 +1,5 @@
 package pxl.be.organizationservice.dto;
 
-public record OrganizationRequest(String name, String address) { }
+import jakarta.validation.constraints.NotBlank;
+
+public record OrganizationRequest(@NotBlank String name) { }

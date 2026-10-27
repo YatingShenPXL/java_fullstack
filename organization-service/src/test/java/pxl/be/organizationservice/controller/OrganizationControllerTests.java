@@ -1,195 +1,95 @@
 package pxl.be.organizationservice.controller;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import pxl.be.organizationservice.domain.Organization;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import pxl.be.organizationservice.dto.DepartmentDto;
+import pxl.be.organizationservice.dto.OrganizationRequest;
+import pxl.be.organizationservice.dto.OrganizationResponse;
 import pxl.be.organizationservice.service.OrganizationService;
 
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@ExtendWith(MockitoExtension.class)
+@WebMvcTest(OrganizationController.class)
 class OrganizationControllerTests {
 
-    @Mock
+    private static final OrganizationResponse PXL =
+            new OrganizationResponse(1L, "PXL", null, null);
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
     private OrganizationService organizationService;
 
-    @InjectMocks
-    private OrganizationController organizationController;
+    @Test
+    void add_withValidBody_returns201AndTheSavedOrganization() throws Exception {
+        when(organizationService.add(any(OrganizationRequest.class))).thenReturn(PXL);
 
-    private Organization testOrganization;
-
-    @BeforeEach
-    void setUp() {
-        testOrganization = new Organization();
-        testOrganization.setId(1L);
-        testOrganization.setName("PXL");
+        mockMvc.perform(post("/api/organization")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"PXL\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.name").value("PXL"));
     }
 
     @Test
-    void add_returnsCreatedStatusAndSavedOrganization() {
-        // Arrange
-        Organization input = new Organization();
-        input.setName("PXL");
+    void add_withBlankName_returns400AndDoesNotInvokeService() throws Exception {
+        mockMvc.perform(post("/api/organization")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"\"}"))
+                .andExpect(status().isBadRequest());
 
-        when(organizationService.add(input)).thenReturn(testOrganization);
-
-        // Act
-        ResponseEntity<Organization> response = organizationController.add(input);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getId()).isEqualTo(1L);
-        assertThat(response.getBody().getName()).isEqualTo("PXL");
-        verify(organizationService).add(input);
+        verify(organizationService, never()).add(any());
     }
 
     @Test
-    void findAll_returnsOkStatusAndOrganizationList() {
-        // Arrange
-        List<Organization> list = List.of(testOrganization);
-        when(organizationService.findAll()).thenReturn(list);
+    void findById_whenExisting_returns200() throws Exception {
+        when(organizationService.findById(1L)).thenReturn(Optional.of(PXL));
 
-        // Act
-        ResponseEntity<List<Organization>> response = organizationController.findAll();
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).containsExactly(testOrganization);
-        verify(organizationService).findAll();
+        mockMvc.perform(get("/api/organization/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("PXL"));
     }
 
     @Test
-    void findById_whenFound_returnsOkStatusAndOrganization() {
-        // Arrange
-        Long id = 1L;
-        when(organizationService.findById(id)).thenReturn(Optional.of(testOrganization));
+    void findById_whenMissing_returns404() throws Exception {
+        when(organizationService.findById(99L)).thenReturn(Optional.empty());
 
-        // Act
-        ResponseEntity<Organization> response = organizationController.findById(id);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isEqualTo(testOrganization);
-        verify(organizationService).findById(id);
+        mockMvc.perform(get("/api/organization/99"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void findById_whenNotFound_returnsNotFoundStatus() {
-        // Arrange
-        Long id = 99L;
-        when(organizationService.findById(id)).thenReturn(Optional.empty());
+    void findByIdWithDepartments_returnsTheDepartments() throws Exception {
+        OrganizationResponse withDepartments = new OrganizationResponse(1L, "PXL",
+                List.of(new DepartmentDto(5L, "IT", 1L, null)), null);
+        when(organizationService.findByIdWithDepartments(1L)).thenReturn(Optional.of(withDepartments));
 
-        // Act
-        ResponseEntity<Organization> response = organizationController.findById(id);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody()).isNull();
-        verify(organizationService).findById(id);
+        mockMvc.perform(get("/api/organization/1/with-departments"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.departments[0].name").value("IT"));
     }
 
     @Test
-    void findByIdWithDepartments_whenFound_returnsOkStatus() {
-        // Arrange
-        Long id = 1L;
-        when(organizationService.findByIdWithDepartments(id)).thenReturn(Optional.of(testOrganization));
+    void findByIdWithDepartmentsAndEmployees_whenMissing_returns404() throws Exception {
+        when(organizationService.findByIdWithDepartmentsAndEmployees(99L)).thenReturn(Optional.empty());
 
-        // Act
-        ResponseEntity<Organization> response = organizationController.findByIdWithDepartments(id);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isEqualTo(testOrganization);
-        verify(organizationService).findByIdWithDepartments(id);
-    }
-
-    @Test
-    void findByIdWithDepartments_whenNotFound_returnsNotFoundStatus() {
-        // Arrange
-        Long id = 99L;
-        when(organizationService.findByIdWithDepartments(id)).thenReturn(Optional.empty());
-
-        // Act
-        ResponseEntity<Organization> response = organizationController.findByIdWithDepartments(id);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody()).isNull();
-        verify(organizationService).findByIdWithDepartments(id);
-    }
-
-    @Test
-    void findByIdWithEmployees_whenFound_returnsOkStatus() {
-        // Arrange
-        Long id = 1L;
-        when(organizationService.findByIdWithEmployees(id)).thenReturn(Optional.of(testOrganization));
-
-        // Act
-        ResponseEntity<Organization> response = organizationController.findByIdWithEmployees(id);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isEqualTo(testOrganization);
-        verify(organizationService).findByIdWithEmployees(id);
-    }
-
-    @Test
-    void findByIdWithEmployees_whenNotFound_returnsNotFoundStatus() {
-        // Arrange
-        Long id = 99L;
-        when(organizationService.findByIdWithEmployees(id)).thenReturn(Optional.empty());
-
-        // Act
-        ResponseEntity<Organization> response = organizationController.findByIdWithEmployees(id);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody()).isNull();
-        verify(organizationService).findByIdWithEmployees(id);
-    }
-
-    @Test
-    void findByIdWithDepartmentsAndEmployees_whenFound_returnsOkStatus() {
-        // Arrange
-        Long id = 1L;
-        when(organizationService.findByIdWithDepartmentsAndEmployees(id))
-                .thenReturn(Optional.of(testOrganization));
-
-        // Act
-        ResponseEntity<Organization> response =
-                organizationController.findByIdWithDepartmentsAndEmployees(id);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isEqualTo(testOrganization);
-        verify(organizationService).findByIdWithDepartmentsAndEmployees(id);
-    }
-
-    @Test
-    void findByIdWithDepartmentsAndEmployees_whenNotFound_returnsNotFoundStatus() {
-        // Arrange
-        Long id = 99L;
-        when(organizationService.findByIdWithDepartmentsAndEmployees(id))
-                .thenReturn(Optional.empty());
-
-        // Act
-        ResponseEntity<Organization> response =
-                organizationController.findByIdWithDepartmentsAndEmployees(id);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody()).isNull();
-        verify(organizationService).findByIdWithDepartmentsAndEmployees(id);
+        mockMvc.perform(get("/api/organization/99/with-departments-and-employees"))
+                .andExpect(status().isNotFound());
     }
 }

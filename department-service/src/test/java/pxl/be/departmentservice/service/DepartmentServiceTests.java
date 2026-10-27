@@ -1,20 +1,26 @@
 package pxl.be.departmentservice.service;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import pxl.be.departmentservice.client.EmployeeClient;
 import pxl.be.departmentservice.domain.Department;
+import pxl.be.departmentservice.dto.DepartmentRequest;
+import pxl.be.departmentservice.dto.DepartmentResponse;
+import pxl.be.departmentservice.dto.EmployeeDto;
 import pxl.be.departmentservice.repository.DepartmentRepository;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class DepartmentServiceTests {
@@ -22,115 +28,81 @@ class DepartmentServiceTests {
     @Mock
     private DepartmentRepository departmentRepository;
 
+    @Mock
+    private EmployeeClient employeeClient;
+
     @InjectMocks
     private DepartmentService departmentService;
 
-    private Department testDepartment;
+    private Department department(Long id, String name, Long organizationId) {
+        Department department = new Department();
+        department.setId(id);
+        department.setName(name);
+        department.setOrganizationId(organizationId);
+        return department;
+    }
 
-    @BeforeEach
-    void setUp() {
-        testDepartment = new Department();
-        testDepartment.setName("Human Resources");
-        testDepartment.setOrganizationId(1L);
+    private EmployeeDto employee(Long id, Long departmentId) {
+        return new EmployeeDto(id, "Jane", "Doe", "jane" + id + "@pxl.be", departmentId, 1L);
     }
 
     @Test
-    void add_resetsIdAndEmployees_andSavesDepartment() {
-        // Arrange
-        testDepartment.setId(99L); // ID die overschreven moet worden
-        testDepartment.setEmployees(new ArrayList<>()); // Wordt leeggemaakt
+    void add_savesDepartmentWithTheRequestedFields() {
+        when(departmentRepository.save(any(Department.class)))
+                .thenReturn(department(5L, "Human Resources", 1L));
 
-        when(departmentRepository.save(testDepartment)).thenReturn(testDepartment);
+        DepartmentResponse response =
+                departmentService.add(new DepartmentRequest("Human Resources", 1L));
 
-        // Act
-        Department result = departmentService.add(testDepartment);
-
-        // Assert
-        assertThat(result.getId()).isNull();
-        assertThat(result.getEmployees()).isEmpty();
-        verify(departmentRepository).save(testDepartment);
+        ArgumentCaptor<Department> captor = ArgumentCaptor.forClass(Department.class);
+        verify(departmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getId()).isNull();
+        assertThat(captor.getValue().getName()).isEqualTo("Human Resources");
+        assertThat(captor.getValue().getOrganizationId()).isEqualTo(1L);
+        assertThat(response.id()).isEqualTo(5L);
+        assertThat(response.employees()).isNull();
     }
 
     @Test
-    void findById_whenFound_returnsOptionalWithDepartment() {
-        // Arrange
-        Long id = 1L;
-        testDepartment.setId(id);
-        when(departmentRepository.findById(id)).thenReturn(Optional.of(testDepartment));
+    void findById_whenNotFound_returnsEmpty() {
+        when(departmentRepository.findById(99L)).thenReturn(Optional.empty());
 
-        // Act
-        Optional<Department> result = departmentService.findById(id);
-
-        // Assert
-        assertThat(result).isPresent();
-        assertThat(result.get().getName()).isEqualTo("Human Resources");
-        verify(departmentRepository).findById(id);
+        assertThat(departmentService.findById(99L)).isEmpty();
     }
 
     @Test
-    void findById_whenNotFound_returnsEmptyOptional() {
-        // Arrange
-        Long id = 99L;
-        when(departmentRepository.findById(id)).thenReturn(Optional.empty());
+    void findByOrganization_doesNotCallEmployeeService() {
+        when(departmentRepository.findByOrganizationId(1L))
+                .thenReturn(List.of(department(1L, "IT", 1L)));
 
-        // Act
-        Optional<Department> result = departmentService.findById(id);
+        List<DepartmentResponse> result = departmentService.findByOrganization(1L);
 
-        // Assert
-        assertThat(result).isEmpty();
-        verify(departmentRepository).findById(id);
+        assertThat(result).extracting(DepartmentResponse::name).containsExactly("IT");
+        verifyNoInteractions(employeeClient);
     }
 
     @Test
-    void findAll_returnsListOfDepartments() {
-        // Arrange
-        List<Department> departments = List.of(testDepartment);
-        when(departmentRepository.findAll()).thenReturn(departments);
+    void findByOrganizationWithEmployees_groupsEmployeesPerDepartment() {
+        when(departmentRepository.findByOrganizationId(1L))
+                .thenReturn(List.of(department(1L, "IT", 1L), department(2L, "HR", 1L)));
+        when(employeeClient.findByOrganization(1L))
+                .thenReturn(List.of(employee(10L, 1L), employee(11L, 1L), employee(12L, 2L)));
 
-        // Act
-        List<Department> result = departmentService.findAll();
+        List<DepartmentResponse> result = departmentService.findByOrganizationWithEmployees(1L);
 
-        // Assert
-        assertThat(result).hasSize(1);
-        assertThat(result).contains(testDepartment);
-        verify(departmentRepository).findAll();
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).employees()).extracting(EmployeeDto::id).containsExactly(10L, 11L);
+        assertThat(result.get(1).employees()).extracting(EmployeeDto::id).containsExactly(12L);
     }
 
     @Test
-    void findByOrganization_returnsDepartmentsForGivenOrganizationId() {
-        // Arrange
-        Long organizationId = 1L;
-        List<Department> departments = List.of(testDepartment);
-        when(departmentRepository.findByOrganizationId(organizationId)).thenReturn(departments);
+    void findByOrganizationWithEmployees_departmentWithoutEmployeesGetsEmptyList() {
+        when(departmentRepository.findByOrganizationId(1L))
+                .thenReturn(List.of(department(1L, "IT", 1L)));
+        when(employeeClient.findByOrganization(1L)).thenReturn(List.of());
 
-        // Act
-        List<Department> result = departmentService.findByOrganization(organizationId);
+        List<DepartmentResponse> result = departmentService.findByOrganizationWithEmployees(1L);
 
-        // Assert
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getOrganizationId()).isEqualTo(organizationId);
-        verify(departmentRepository).findByOrganizationId(organizationId);
-    }
-
-    @Test
-    void findByOrganizationWithEmployees_resetsEmployeesToEmptyList() {
-        // Arrange
-        Long organizationId = 1L;
-        Department deptWithEmployees = new Department();
-        deptWithEmployees.setName("IT");
-        deptWithEmployees.setOrganizationId(organizationId);
-        // We simuleren dat er initieel werknemers aanwezig waren
-        deptWithEmployees.setEmployees(new ArrayList<>());
-
-        when(departmentRepository.findByOrganizationId(organizationId))
-                .thenReturn(List.of(deptWithEmployees));
-
-        // Act
-        List<Department> result = departmentService.findByOrganizationWithEmployees(organizationId);
-
-        // Assert
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getEmployees()).isEmpty();
-        verify(departmentRepository).findByOrganizationId(organizationId);
+        assertThat(result.get(0).employees()).isNotNull().isEmpty();
     }
 }

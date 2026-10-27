@@ -8,7 +8,7 @@ import pxl.be.notificationservice.domain.NotificationRequest;
 import pxl.be.notificationservice.service.NotificationService;
 
 @RestController
-@RequestMapping("/api/notifications")
+@RequestMapping("/api/notification")
 public class NotificationController {
 
     private final NotificationService notificationService;

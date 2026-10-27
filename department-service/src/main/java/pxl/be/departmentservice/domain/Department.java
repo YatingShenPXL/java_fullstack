@@ -1,14 +1,12 @@
 package pxl.be.departmentservice.domain;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
-
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "departments")
@@ -20,13 +18,7 @@ public class Department {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotBlank
     private String name;
 
-    @NotNull
     private Long organizationId;
-
-    @Transient
-    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
-    private List<Object> employees = new ArrayList<>();
 }

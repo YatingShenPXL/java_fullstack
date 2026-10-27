@@ -60,6 +60,6 @@ class NotificationServiceTests {
         ILoggingEvent loggingEvent = listAppender.list.get(0);
         assertThat(loggingEvent.getLevel()).isEqualTo(Level.INFO);
         assertThat(loggingEvent.getFormattedMessage())
-                .isEqualTo("Gesimuleerde notificatie voor student@pxl.be: Nieuwe afdeling toegevoegd");
+                .isEqualTo("Notificatie ontvangen voor student@pxl.be: Nieuwe afdeling toegevoegd");
     }
 }

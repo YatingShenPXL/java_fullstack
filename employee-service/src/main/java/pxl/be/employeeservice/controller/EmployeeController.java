@@ -4,13 +4,14 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import pxl.be.employeeservice.domain.Employee;
+import pxl.be.employeeservice.dto.EmployeeRequest;
+import pxl.be.employeeservice.dto.EmployeeResponse;
 import pxl.be.employeeservice.service.EmployeeService;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/employees")
+@RequestMapping("/api/employee")
 public class EmployeeController {
 
     private final EmployeeService employeeService;
@@ -20,15 +21,15 @@ public class EmployeeController {
     }
 
     @PostMapping
-    public ResponseEntity<Employee> add(
-            @Valid @RequestBody Employee employee) {
+    public ResponseEntity<EmployeeResponse> add(
+            @Valid @RequestBody EmployeeRequest request) {
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(employeeService.add(employee));
+                .body(employeeService.add(request));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Employee> findById(
+    public ResponseEntity<EmployeeResponse> findById(
             @PathVariable("id") Long id) {
 
         return employeeService.findById(id)
@@ -37,12 +38,12 @@ public class EmployeeController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Employee>> findAll() {
+    public ResponseEntity<List<EmployeeResponse>> findAll() {
         return ResponseEntity.ok(employeeService.findAll());
     }
 
     @GetMapping("/department/{departmentId}")
-    public ResponseEntity<List<Employee>> findByDepartment(
+    public ResponseEntity<List<EmployeeResponse>> findByDepartment(
             @PathVariable("departmentId") Long departmentId) {
 
         return ResponseEntity.ok(
@@ -50,7 +51,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/organization/{organizationId}")
-    public ResponseEntity<List<Employee>> findByOrganization(
+    public ResponseEntity<List<EmployeeResponse>> findByOrganization(
             @PathVariable("organizationId") Long organizationId) {
 
         return ResponseEntity.ok(

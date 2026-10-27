@@ -34,6 +34,25 @@ services:
     volumes:
       - organization_data:/var/lib/mysql
 
+  loki:
+    image: grafana/loki:3.7.7
+    container_name: loki
+    ports:
+      - "3100:3100"
+
+  grafana:
+    image: grafana/grafana:13.2.1
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - loki
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    volumes:
+      - ./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+
 volumes:
   employee_data:
   department_data:

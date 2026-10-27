@@ -1,14 +1,12 @@
 package pxl.be.organizationservice.dto;
 
-import pxl.be.departmentservice.domain.Department;
-import pxl.be.employeeservice.domain.Employee;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.List;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record OrganizationResponse(
         Long id,
         String name,
-        String address,
-        List<Department> departments,
-        List<Employee> employees) {
-}
+        List<DepartmentDto> departments,
+        List<EmployeeDto> employees) { }

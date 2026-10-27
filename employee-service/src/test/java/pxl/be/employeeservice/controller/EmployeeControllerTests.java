@@ -1,147 +1,112 @@
 package pxl.be.employeeservice.controller;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import pxl.be.employeeservice.controller.EmployeeController;
-import pxl.be.employeeservice.domain.Employee;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import pxl.be.employeeservice.dto.EmployeeRequest;
+import pxl.be.employeeservice.dto.EmployeeResponse;
 import pxl.be.employeeservice.service.EmployeeService;
 
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@ExtendWith(MockitoExtension.class)
+@WebMvcTest(EmployeeController.class)
 class EmployeeControllerTests {
 
-    @Mock
+    private static final EmployeeResponse JANE =
+            new EmployeeResponse(1L, "Jane", "Doe", "jane.doe@pxl.be", 10L, 100L);
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
     private EmployeeService employeeService;
 
-    @InjectMocks
-    private EmployeeController employeeController;
+    @Test
+    void add_withValidBody_returns201AndTheSavedEmployee() throws Exception {
+        when(employeeService.add(any(EmployeeRequest.class))).thenReturn(JANE);
 
-    private Employee testEmployee;
-
-    @BeforeEach
-    void setUp() {
-        testEmployee = new Employee();
-        testEmployee.setId(1L);
-        testEmployee.setFirstName("Jane");
-        testEmployee.setLastName("Doe");
-        testEmployee.setEmail("jane.doe@pxl.be");
-        testEmployee.setDepartmentId(10L);
-        testEmployee.setOrganizationId(100L);
+        mockMvc.perform(post("/api/employee")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName":"Jane","lastName":"Doe","email":"jane.doe@pxl.be",
+                                 "departmentId":10,"organizationId":100}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.email").value("jane.doe@pxl.be"));
     }
 
     @Test
-    void add_returnsCreatedStatusAndSavedEmployee() {
-        // Arrange
-        Employee input = new Employee();
-        input.setFirstName("Jane");
-        input.setLastName("Doe");
-        input.setEmail("jane.doe@pxl.be");
-        input.setDepartmentId(10L);
-        input.setOrganizationId(100L);
+    void add_withInvalidBody_returns400AndDoesNotInvokeService() throws Exception {
+        mockMvc.perform(post("/api/employee")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName":"","lastName":"Doe","email":"geen-email",
+                                 "departmentId":10,"organizationId":100}
+                                """))
+                .andExpect(status().isBadRequest());
 
-        when(employeeService.add(input)).thenReturn(testEmployee);
-
-        // Act
-        ResponseEntity<Employee> response = employeeController.add(input);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getId()).isEqualTo(1L);
-        assertThat(response.getBody().getFirstName()).isEqualTo("Jane");
-        assertThat(response.getBody().getLastName()).isEqualTo("Doe");
-        assertThat(response.getBody().getEmail()).isEqualTo("jane.doe@pxl.be");
-        verify(employeeService).add(input);
+        verify(employeeService, never()).add(any());
     }
 
     @Test
-    void findById_whenFound_returnsOkStatusAndEmployee() {
-        // Arrange
-        Long id = 1L;
-        when(employeeService.findById(id)).thenReturn(Optional.of(testEmployee));
+    void add_withoutDepartment_returns400AndDoesNotInvokeService() throws Exception {
+        mockMvc.perform(post("/api/employee")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName":"Jane","lastName":"Doe","email":"jane.doe@pxl.be",
+                                 "organizationId":100}
+                                """))
+                .andExpect(status().isBadRequest());
 
-        // Act
-        ResponseEntity<Employee> response = employeeController.findById(id);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isEqualTo(testEmployee);
-        assertThat(response.getBody().getEmail()).isEqualTo("jane.doe@pxl.be");
-        verify(employeeService).findById(id);
+        verify(employeeService, never()).add(any());
     }
 
     @Test
-    void findById_whenNotFound_returnsNotFoundStatus() {
-        // Arrange
-        Long id = 99L;
-        when(employeeService.findById(id)).thenReturn(Optional.empty());
+    void findById_whenExisting_returns200() throws Exception {
+        when(employeeService.findById(1L)).thenReturn(Optional.of(JANE));
 
-        // Act
-        ResponseEntity<Employee> response = employeeController.findById(id);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody()).isNull();
-        verify(employeeService).findById(id);
+        mockMvc.perform(get("/api/employee/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.firstName").value("Jane"));
     }
 
     @Test
-    void findAll_returnsOkStatusAndEmployeeList() {
-        // Arrange
-        List<Employee> employees = List.of(testEmployee);
-        when(employeeService.findAll()).thenReturn(employees);
+    void findById_whenMissing_returns404() throws Exception {
+        when(employeeService.findById(99L)).thenReturn(Optional.empty());
 
-        // Act
-        ResponseEntity<List<Employee>> response = employeeController.findAll();
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).containsExactly(testEmployee);
-        verify(employeeService).findAll();
+        mockMvc.perform(get("/api/employee/99"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void findByDepartment_returnsOkStatusAndEmployeeList() {
-        // Arrange
-        Long departmentId = 10L;
-        List<Employee> employees = List.of(testEmployee);
-        when(employeeService.findByDepartment(departmentId)).thenReturn(employees);
+    void findByDepartment_returns200WithTheEmployees() throws Exception {
+        when(employeeService.findByDepartment(10L)).thenReturn(List.of(JANE));
 
-        // Act
-        ResponseEntity<List<Employee>> response = employeeController.findByDepartment(departmentId);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).containsExactly(testEmployee);
-        assertThat(response.getBody().get(0).getDepartmentId()).isEqualTo(departmentId);
-        verify(employeeService).findByDepartment(departmentId);
+        mockMvc.perform(get("/api/employee/department/10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].departmentId").value(10));
     }
 
     @Test
-    void findByOrganization_returnsOkStatusAndEmployeeList() {
-        // Arrange
-        Long organizationId = 100L;
-        List<Employee> employees = List.of(testEmployee);
-        when(employeeService.findByOrganization(organizationId)).thenReturn(employees);
+    void findByOrganization_returns200WithTheEmployees() throws Exception {
+        when(employeeService.findByOrganization(100L)).thenReturn(List.of(JANE));
 
-        // Act
-        ResponseEntity<List<Employee>> response = employeeController.findByOrganization(organizationId);
-
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).containsExactly(testEmployee);
-        assertThat(response.getBody().get(0).getOrganizationId()).isEqualTo(organizationId);
-        verify(employeeService).findByOrganization(organizationId);
+        mockMvc.perform(get("/api/employee/organization/100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].organizationId").value(100));
     }
 }

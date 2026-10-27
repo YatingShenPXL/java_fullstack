@@ -4,38 +4,37 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import pxl.be.organizationservice.domain.Organization;
+import pxl.be.organizationservice.dto.OrganizationRequest;
+import pxl.be.organizationservice.dto.OrganizationResponse;
 import pxl.be.organizationservice.service.OrganizationService;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/organizations")
+@RequestMapping("/api/organization")
 public class OrganizationController {
 
     private final OrganizationService organizationService;
 
-    public OrganizationController(
-            OrganizationService organizationService) {
-
+    public OrganizationController(OrganizationService organizationService) {
         this.organizationService = organizationService;
     }
 
     @PostMapping
-    public ResponseEntity<Organization> add(
-            @Valid @RequestBody Organization organization) {
+    public ResponseEntity<OrganizationResponse> add(
+            @Valid @RequestBody OrganizationRequest request) {
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(organizationService.add(organization));
+                .body(organizationService.add(request));
     }
 
     @GetMapping
-    public ResponseEntity<List<Organization>> findAll() {
+    public ResponseEntity<List<OrganizationResponse>> findAll() {
         return ResponseEntity.ok(organizationService.findAll());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Organization> findById(
+    public ResponseEntity<OrganizationResponse> findById(
             @PathVariable("id") Long id) {
 
         return organizationService.findById(id)
@@ -44,7 +43,7 @@ public class OrganizationController {
     }
 
     @GetMapping("/{id}/with-departments")
-    public ResponseEntity<Organization> findByIdWithDepartments(
+    public ResponseEntity<OrganizationResponse> findByIdWithDepartments(
             @PathVariable("id") Long id) {
 
         return organizationService.findByIdWithDepartments(id)
@@ -53,7 +52,7 @@ public class OrganizationController {
     }
 
     @GetMapping("/{id}/with-employees")
-    public ResponseEntity<Organization> findByIdWithEmployees(
+    public ResponseEntity<OrganizationResponse> findByIdWithEmployees(
             @PathVariable("id") Long id) {
 
         return organizationService.findByIdWithEmployees(id)
@@ -62,7 +61,7 @@ public class OrganizationController {
     }
 
     @GetMapping("/{id}/with-departments-and-employees")
-    public ResponseEntity<Organization> findByIdWithDepartmentsAndEmployees(
+    public ResponseEntity<OrganizationResponse> findByIdWithDepartmentsAndEmployees(
             @PathVariable("id") Long id) {
 
         return organizationService.findByIdWithDepartmentsAndEmployees(id)

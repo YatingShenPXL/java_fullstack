@@ -1,19 +1,25 @@
 package pxl.be.employeeservice.service;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import pxl.be.employeeservice.client.NotificationClient;
 import pxl.be.employeeservice.domain.Employee;
+import pxl.be.employeeservice.dto.EmployeeRequest;
+import pxl.be.employeeservice.dto.EmployeeResponse;
+import pxl.be.employeeservice.dto.NotificationRequest;
 import pxl.be.employeeservice.repository.EmployeeRepository;
 
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class EmployeeServiceTests {
@@ -21,111 +27,92 @@ class EmployeeServiceTests {
     @Mock
     private EmployeeRepository employeeRepository;
 
+    @Mock
+    private NotificationClient notificationClient;
+
     @InjectMocks
     private EmployeeService employeeService;
 
-    private Employee testEmployee;
-
-    @BeforeEach
-    void setUp() {
-        testEmployee = new Employee();
-        testEmployee.setFirstName("Jane");
-        testEmployee.setLastName("Doe");
-        testEmployee.setEmail("jane.doe@pxl.be");
-        testEmployee.setDepartmentId(10L);
-        testEmployee.setOrganizationId(100L);
+    private Employee employee(Long id) {
+        Employee employee = new Employee();
+        employee.setId(id);
+        employee.setFirstName("Jane");
+        employee.setLastName("Doe");
+        employee.setEmail("jane.doe@pxl.be");
+        employee.setDepartmentId(10L);
+        employee.setOrganizationId(100L);
+        return employee;
     }
 
     @Test
-    void add_resetsIdToNull_andSavesEmployee() {
-        // Arrange: geef mee met een bestaand ID om te valideren dat de service dit wist
-        testEmployee.setId(50L);
+    void add_savesEmployeeWithTheRequestedFields() {
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee(1L));
+        EmployeeRequest request =
+                new EmployeeRequest("Jane", "Doe", "jane.doe@pxl.be", 10L, 100L);
 
-        when(employeeRepository.save(testEmployee)).thenReturn(testEmployee);
+        EmployeeResponse response = employeeService.add(request);
 
-        // Act
-        Employee result = employeeService.add(testEmployee);
-
-        // Assert
-        assertThat(result.getId()).isNull();
-        assertThat(result.getFirstName()).isEqualTo("Jane");
-        verify(employeeRepository).save(testEmployee);
+        ArgumentCaptor<Employee> captor = ArgumentCaptor.forClass(Employee.class);
+        verify(employeeRepository).save(captor.capture());
+        Employee saved = captor.getValue();
+        assertThat(saved.getId()).isNull();
+        assertThat(saved.getFirstName()).isEqualTo("Jane");
+        assertThat(saved.getLastName()).isEqualTo("Doe");
+        assertThat(saved.getEmail()).isEqualTo("jane.doe@pxl.be");
+        assertThat(saved.getDepartmentId()).isEqualTo(10L);
+        assertThat(saved.getOrganizationId()).isEqualTo(100L);
+        assertThat(response.id()).isEqualTo(1L);
     }
 
     @Test
-    void findById_whenFound_returnsOptionalWithEmployee() {
-        // Arrange
-        Long id = 1L;
-        testEmployee.setId(id);
-        when(employeeRepository.findById(id)).thenReturn(Optional.of(testEmployee));
+    void add_sendsNotificationToTheEmailOfTheSavedEmployee() {
+        when(employeeRepository.save(any(Employee.class))).thenReturn(employee(1L));
 
-        // Act
-        Optional<Employee> result = employeeService.findById(id);
+        employeeService.add(new EmployeeRequest("Jane", "Doe", "jane.doe@pxl.be", 10L, 100L));
 
-        // Assert
-        assertThat(result).isPresent();
-        assertThat(result.get().getEmail()).isEqualTo("jane.doe@pxl.be");
-        verify(employeeRepository).findById(id);
+        ArgumentCaptor<NotificationRequest> captor =
+                ArgumentCaptor.forClass(NotificationRequest.class);
+        verify(notificationClient).sendNotification(captor.capture());
+        assertThat(captor.getValue().recipient()).isEqualTo("jane.doe@pxl.be");
+        assertThat(captor.getValue().message()).contains("Jane", "Doe");
     }
 
     @Test
-    void findById_whenNotFound_returnsEmptyOptional() {
-        // Arrange
-        Long id = 99L;
-        when(employeeRepository.findById(id)).thenReturn(Optional.empty());
+    void findById_whenFound_mapsAllFields() {
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(employee(1L)));
 
-        // Act
-        Optional<Employee> result = employeeService.findById(id);
+        Optional<EmployeeResponse> result = employeeService.findById(1L);
 
-        // Assert
-        assertThat(result).isEmpty();
-        verify(employeeRepository).findById(id);
+        assertThat(result).contains(new EmployeeResponse(
+                1L, "Jane", "Doe", "jane.doe@pxl.be", 10L, 100L));
     }
 
     @Test
-    void findAll_returnsListOfEmployees() {
-        // Arrange
-        List<Employee> employees = List.of(testEmployee);
-        when(employeeRepository.findAll()).thenReturn(employees);
+    void findById_whenNotFound_returnsEmpty() {
+        when(employeeRepository.findById(99L)).thenReturn(Optional.empty());
 
-        // Act
-        List<Employee> result = employeeService.findAll();
-
-        // Assert
-        assertThat(result).hasSize(1);
-        assertThat(result).contains(testEmployee);
-        verify(employeeRepository).findAll();
+        assertThat(employeeService.findById(99L)).isEmpty();
     }
 
     @Test
-    void findByDepartment_returnsEmployeesForGivenDepartmentId() {
-        // Arrange
-        Long departmentId = 10L;
-        List<Employee> employees = List.of(testEmployee);
-        when(employeeRepository.findByDepartmentId(departmentId)).thenReturn(employees);
+    void findByDepartment_returnsOnlyEmployeesOfThatDepartment() {
+        when(employeeRepository.findByDepartmentId(10L))
+                .thenReturn(List.of(employee(1L), employee(2L)));
 
-        // Act
-        List<Employee> result = employeeService.findByDepartment(departmentId);
+        List<EmployeeResponse> result = employeeService.findByDepartment(10L);
 
-        // Assert
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getDepartmentId()).isEqualTo(departmentId);
-        verify(employeeRepository).findByDepartmentId(departmentId);
+        assertThat(result).extracting(EmployeeResponse::id).containsExactly(1L, 2L);
+        assertThat(result).allMatch(response -> response.departmentId().equals(10L));
     }
 
     @Test
-    void findByOrganization_returnsEmployeesForGivenOrganizationId() {
-        // Arrange
-        Long organizationId = 100L;
-        List<Employee> employees = List.of(testEmployee);
-        when(employeeRepository.findByOrganizationId(organizationId)).thenReturn(employees);
+    void findByOrganization_returnsOnlyEmployeesOfThatOrganization() {
+        when(employeeRepository.findByOrganizationId(100L))
+                .thenReturn(List.of(employee(3L)));
 
-        // Act
-        List<Employee> result = employeeService.findByOrganization(organizationId);
+        List<EmployeeResponse> result = employeeService.findByOrganization(100L);
 
-        // Assert
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getOrganizationId()).isEqualTo(organizationId);
-        verify(employeeRepository).findByOrganizationId(organizationId);
+        assertThat(result).extracting(EmployeeResponse::id).containsExactly(3L);
+        assertThat(result.get(0).organizationId()).isEqualTo(100L);
     }
 }

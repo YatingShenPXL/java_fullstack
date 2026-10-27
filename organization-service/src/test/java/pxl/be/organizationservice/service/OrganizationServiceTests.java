@@ -1,22 +1,28 @@
 package pxl.be.organizationservice.service;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import pxl.be.departmentservice.domain.Department;
-import pxl.be.employeeservice.domain.Employee;
+import pxl.be.organizationservice.client.DepartmentClient;
+import pxl.be.organizationservice.client.EmployeeClient;
 import pxl.be.organizationservice.domain.Organization;
+import pxl.be.organizationservice.dto.DepartmentDto;
+import pxl.be.organizationservice.dto.EmployeeDto;
+import pxl.be.organizationservice.dto.OrganizationRequest;
+import pxl.be.organizationservice.dto.OrganizationResponse;
 import pxl.be.organizationservice.repository.OrganizationRepository;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OrganizationServiceTests {
@@ -24,173 +30,83 @@ class OrganizationServiceTests {
     @Mock
     private OrganizationRepository organizationRepository;
 
+    @Mock
+    private DepartmentClient departmentClient;
+
+    @Mock
+    private EmployeeClient employeeClient;
+
     @InjectMocks
     private OrganizationService organizationService;
 
-    private Organization testOrganization;
-
-    @BeforeEach
-    void setUp() {
-        testOrganization = new Organization();
-        testOrganization.setName("PXL Research");
+    private Organization organization(Long id, String name) {
+        Organization organization = new Organization();
+        organization.setId(id);
+        organization.setName(name);
+        return organization;
     }
 
     @Test
-    void add_resetsIdAndCollections_andSavesOrganization() {
-        // Arrange
-        testOrganization.setId(99L);
-        testOrganization.setDepartments(new ArrayList<>(List.of(new Department())));
-        testOrganization.setEmployees(new ArrayList<>(List.of(new Employee())));
+    void add_savesOrganizationWithTheRequestedName() {
+        when(organizationRepository.save(any(Organization.class)))
+                .thenReturn(organization(1L, "PXL"));
 
-        when(organizationRepository.save(testOrganization)).thenReturn(testOrganization);
+        OrganizationResponse response = organizationService.add(new OrganizationRequest("PXL"));
 
-        // Act
-        Organization result = organizationService.add(testOrganization);
-
-        // Assert
-        assertThat(result.getId()).isNull();
-        assertThat(result.getDepartments()).isEmpty();
-        assertThat(result.getEmployees()).isEmpty();
-        verify(organizationRepository).save(testOrganization);
+        ArgumentCaptor<Organization> captor = ArgumentCaptor.forClass(Organization.class);
+        verify(organizationRepository).save(captor.capture());
+        assertThat(captor.getValue().getId()).isNull();
+        assertThat(captor.getValue().getName()).isEqualTo("PXL");
+        assertThat(response.id()).isEqualTo(1L);
+        assertThat(response.departments()).isNull();
+        assertThat(response.employees()).isNull();
     }
 
     @Test
-    void findAll_returnsListOfOrganizations() {
-        // Arrange
-        List<Organization> list = List.of(testOrganization);
-        when(organizationRepository.findAll()).thenReturn(list);
+    void findById_whenNotFound_returnsEmptyAndCallsNoOtherService() {
+        when(organizationRepository.findById(99L)).thenReturn(Optional.empty());
 
-        // Act
-        List<Organization> result = organizationService.findAll();
-
-        // Assert
-        assertThat(result).hasSize(1);
-        assertThat(result).contains(testOrganization);
-        verify(organizationRepository).findAll();
+        assertThat(organizationService.findById(99L)).isEmpty();
+        verifyNoInteractions(departmentClient, employeeClient);
     }
 
     @Test
-    void findById_whenFound_returnsOptionalWithOrganization() {
-        // Arrange
-        Long id = 1L;
-        testOrganization.setId(id);
-        when(organizationRepository.findById(id)).thenReturn(Optional.of(testOrganization));
+    void findByIdWithDepartments_fillsDepartmentsFromDepartmentService() {
+        when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization(1L, "PXL")));
+        when(departmentClient.findByOrganization(1L))
+                .thenReturn(List.of(new DepartmentDto(5L, "IT", 1L, null)));
 
-        // Act
-        Optional<Organization> result = organizationService.findById(id);
+        OrganizationResponse response = organizationService.findByIdWithDepartments(1L).orElseThrow();
 
-        // Assert
-        assertThat(result).isPresent();
-        assertThat(result.get().getName()).isEqualTo("PXL Research");
-        verify(organizationRepository).findById(id);
+        assertThat(response.departments()).extracting(DepartmentDto::name).containsExactly("IT");
+        assertThat(response.employees()).isNull();
+        verifyNoInteractions(employeeClient);
     }
 
     @Test
-    void findById_whenNotFound_returnsEmptyOptional() {
-        // Arrange
-        Long id = 99L;
-        when(organizationRepository.findById(id)).thenReturn(Optional.empty());
+    void findByIdWithEmployees_fillsEmployeesFromEmployeeService() {
+        when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization(1L, "PXL")));
+        when(employeeClient.findByOrganization(1L))
+                .thenReturn(List.of(new EmployeeDto(7L, "Jane", "Doe", "jane@pxl.be", 5L, 1L)));
 
-        // Act
-        Optional<Organization> result = organizationService.findById(id);
+        OrganizationResponse response = organizationService.findByIdWithEmployees(1L).orElseThrow();
 
-        // Assert
-        assertThat(result).isEmpty();
-        verify(organizationRepository).findById(id);
+        assertThat(response.employees()).extracting(EmployeeDto::email).containsExactly("jane@pxl.be");
+        assertThat(response.departments()).isNull();
+        verifyNoInteractions(departmentClient);
     }
 
     @Test
-    void findByIdWithDepartments_whenFound_resetsDepartmentsToEmptyList() {
-        // Arrange
-        Long id = 1L;
-        testOrganization.setId(id);
-        testOrganization.setDepartments(new ArrayList<>(List.of(new Department())));
-        when(organizationRepository.findById(id)).thenReturn(Optional.of(testOrganization));
+    void findByIdWithDepartmentsAndEmployees_returnsDepartmentsThatContainTheirEmployees() {
+        EmployeeDto jane = new EmployeeDto(7L, "Jane", "Doe", "jane@pxl.be", 5L, 1L);
+        when(organizationRepository.findById(1L)).thenReturn(Optional.of(organization(1L, "PXL")));
+        when(departmentClient.findByOrganizationWithEmployees(1L))
+                .thenReturn(List.of(new DepartmentDto(5L, "IT", 1L, List.of(jane))));
 
-        // Act
-        Optional<Organization> result = organizationService.findByIdWithDepartments(id);
+        OrganizationResponse response =
+                organizationService.findByIdWithDepartmentsAndEmployees(1L).orElseThrow();
 
-        // Assert
-        assertThat(result).isPresent();
-        assertThat(result.get().getDepartments()).isEmpty();
-        verify(organizationRepository).findById(id);
-    }
-
-    @Test
-    void findByIdWithDepartments_whenNotFound_returnsEmptyOptional() {
-        // Arrange
-        Long id = 99L;
-        when(organizationRepository.findById(id)).thenReturn(Optional.empty());
-
-        // Act
-        Optional<Organization> result = organizationService.findByIdWithDepartments(id);
-
-        // Assert
-        assertThat(result).isEmpty();
-        verify(organizationRepository).findById(id);
-    }
-
-    @Test
-    void findByIdWithEmployees_whenFound_resetsEmployeesToEmptyList() {
-        // Arrange
-        Long id = 1L;
-        testOrganization.setId(id);
-        testOrganization.setEmployees(new ArrayList<>(List.of(new Employee())));
-        when(organizationRepository.findById(id)).thenReturn(Optional.of(testOrganization));
-
-        // Act
-        Optional<Organization> result = organizationService.findByIdWithEmployees(id);
-
-        // Assert
-        assertThat(result).isPresent();
-        assertThat(result.get().getEmployees()).isEmpty();
-        verify(organizationRepository).findById(id);
-    }
-
-    @Test
-    void findByIdWithEmployees_whenNotFound_returnsEmptyOptional() {
-        // Arrange
-        Long id = 99L;
-        when(organizationRepository.findById(id)).thenReturn(Optional.empty());
-
-        // Act
-        Optional<Organization> result = organizationService.findByIdWithEmployees(id);
-
-        // Assert
-        assertThat(result).isEmpty();
-        verify(organizationRepository).findById(id);
-    }
-
-    @Test
-    void findByIdWithDepartmentsAndEmployees_whenFound_resetsBothCollections() {
-        // Arrange
-        Long id = 1L;
-        testOrganization.setId(id);
-        testOrganization.setDepartments(new ArrayList<>(List.of(new Department())));
-        testOrganization.setEmployees(new ArrayList<>(List.of(new Employee())));
-        when(organizationRepository.findById(id)).thenReturn(Optional.of(testOrganization));
-
-        // Act
-        Optional<Organization> result = organizationService.findByIdWithDepartmentsAndEmployees(id);
-
-        // Assert
-        assertThat(result).isPresent();
-        assertThat(result.get().getDepartments()).isEmpty();
-        assertThat(result.get().getEmployees()).isEmpty();
-        verify(organizationRepository).findById(id);
-    }
-
-    @Test
-    void findByIdWithDepartmentsAndEmployees_whenNotFound_returnsEmptyOptional() {
-        // Arrange
-        Long id = 99L;
-        when(organizationRepository.findById(id)).thenReturn(Optional.empty());
-
-        // Act
-        Optional<Organization> result = organizationService.findByIdWithDepartmentsAndEmployees(id);
-
-        // Assert
-        assertThat(result).isEmpty();
-        verify(organizationRepository).findById(id);
+        assertThat(response.departments()).hasSize(1);
+        assertThat(response.departments().get(0).employees()).containsExactly(jane);
     }
 }
